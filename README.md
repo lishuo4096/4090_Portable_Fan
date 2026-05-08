@@ -37,25 +37,3 @@ A high performance portable Fan based on the NIDEC AD4A31K05 which used on RTX40
 * 主板固定框架。用于固定主板上半部分，以及为安装涵道定位。
 * 底座。防止立不住。
 **详细装配可以用fusion360打开文件中的F3Z查看。** 
-图1：剖面图
-
-![图片.png](https://image.lceda.cn/oshwhub/pullImage/56063c6ffe25458fb653c7c71c7430c7.png)
-图2：处理好的风扇。（详细见组装教程视频）
-
-![IMG_20260405_191039.jpg](https://image.lceda.cn/oshwhub/pullImage/a4da524ad3024060a64521e93ead1d95.jpg)
-
-![IMG_20260405_191210.jpg](https://image.lceda.cn/oshwhub/pullImage/02fb59980a8a4626aaa587fc19c472fc.jpg)
-图3：将主板与电池的连接体滑入手柄中。（如果阻力过大，说明公差不对）
-这里是靠镍带定位的，所以不用担心装歪了
-![Screenshot_2026-05-08-23-43-57-734_com.miui.gallery.jpg](https://image.lceda.cn/oshwhub/pullImage/7f6307f43d0c43ad95022f94f7e41024.jpg)
-图4：最后一步，在连接处上速干胶水（T7000也可以，只是干的慢）
-
-![IMG_20260508_180907.jpg](https://image.lceda.cn/oshwhub/pullImage/b014799ac7074988b3ea2b88cfe1789d.jpg) 
-图5：可选，使用1.75mm透明PETG塞入LED孔内，实现均光导光的效果。
-
-![IMG_20260407_171140.jpg](https://image.lceda.cn/oshwhub/pullImage/73c7512b116547d596b899985b71c113.jpg)
-
-
-## 实物图
-
-![IMG_20260509_000651.jpg](https://image.lceda.cn/oshwhub/pullImage/cd6cec845ebf46e8ad2e54bc91955469.jpg)
