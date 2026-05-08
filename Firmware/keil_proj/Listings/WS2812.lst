@@ -1,0 +1,244 @@
+C51 COMPILER V9.60.7.0   WS2812                                                            05/08/2026 19:19:29 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE WS2812
+OBJECT MODULE PLACED IN .\Objects\WS2812.obj
+COMPILER INVOKED BY: C:\Users\lishuo\AppData\Local\Keil_v5\C51\BIN\C51.EXE WS2812.c LARGE OMF2 OPTIMIZE(7,SPEED) BROWSE 
+                    -INCDIR(..\..\C51) DEBUG PRINT(.\Listings\WS2812.lst) OBJECT(.\Objects\WS2812.obj)
+
+line level    source
+
+   1          #include "STC8H.H"
+   2          #include "main.h"
+   3          
+   4          //HSV颜色空间转RGB
+   5          static void HSV2RGB(uint8_t h, uint8_t s, uint8_t v, uint8_t *r, uint8_t *g, uint8_t *b) {
+   6   1          uint8_t region,p,q,t;
+   7   1          uint16_t remainder;
+   8   1          if (s == 0) { // 灰度
+   9   2              *r = *g = *b = v;
+  10   2              return;
+  11   2          }
+  12   1          region = h / 43; // 将 H 分为 6 个区域，每个区域约 43 度
+  13   1          remainder = (h - (region * 43)) * 6; // 计算当前区域内的偏移量
+  14   1          p = (v * (255 - s)) >> 8;
+  15   1          q = (v * (255 - ((s * remainder) >> 8))) >> 8;
+  16   1          t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
+  17   1          switch (region) {
+  18   2              case 0: *r = v; *g = t; *b = p; break;
+  19   2              case 1: *r = q; *g = v; *b = p; break;
+  20   2              case 2: *r = p; *g = v; *b = t; break;
+  21   2              case 3: *r = p; *g = q; *b = v; break;
+  22   2              case 4: *r = t; *g = p; *b = v; break;
+  23   2              default: *r = v; *g = p; *b = q; break;
+  24   2          }
+  25   1      }
+  26          //检测并通过WS2812显示电量
+  27          //////WS2812驱动//////
+  28          #define High_Code 0xf8//11111000
+  29          #define Zero_Code 0xC0//11000000
+  30          //开始发送时，SPIF = 0，结束发送后SPIF = 1;
+  31          static void SPI_Send_1_Byte(unsigned char SPI_Data){
+  32   1          SPDAT = SPI_Data;//写入后，硬件置SPIF = 0;
+  33   1          while(!(SPSTAT & 0x80));//SPI控制器发送完数据后，退出while循环
+  34   1          SPSTAT = 0xC0;//清空中断标志
+  35   1      }
+  36          static void WS2812_Lightup(){
+  37   1          //调用SPI_Send_1_Byte,发送80us的0x00，使灯珠亮起
+  38   1          //80us/0.1667*8 = 60,循环发送40个0
+  39   1          unsigned char i;
+  40   1          for(i = 0;i < 40;i++){//循环40次
+  41   2              SPI_Send_1_Byte(0x00);}
+  42   1      }
+  43          static void WS2812_PinSet(unsigned char Pin){
+  44   1          //传入引脚，配置引脚为推挽
+  45   1          if(Pin == 34){//STC8 MOSI
+  46   2              P_SW1 |= 0X0C;//B3B2 = 1;
+  47   2              SPCTL |= 0X10;//B4 MSTR = 1;
+  48   2              P3IE &= 0XF7; //P33IE = 0;
+  49   2              P3M0 |= 0x10; P3M1 &= ~0x10;}//P34推挽
+  50   1          else if(Pin == 40){//MOSI
+  51   2              P_SW1 |= 0X08;//B3 = 1;
+  52   2              SPCTL |= 0X10;//MSTR = 1;
+  53   2              P4IE &= 0XFD;//P41IE = 0;
+  54   2              P4M0 |= 0x01; P4M1 &= ~0x01;}//P40推挽
+C51 COMPILER V9.60.7.0   WS2812                                                            05/08/2026 19:19:29 PAGE 2   
+
+  55   1          else if(Pin == 23){//MOSI
+  56   2              P_SW1 |= 0X04;//B2 = 1;
+  57   2              SPCTL |= 0X10;//MSTR = 1;
+  58   2              P2IE &= 0XEF;//P24IE = 0;
+  59   2              P2M0 |= 0x08; P2M1 &= ~0x08;}//P23推挽
+  60   1          else if(Pin == 13){//MOSI
+  61   2              P_SW1 &= 0XF3;//B3B2 = 0;
+  62   2              SPCTL |= 0X10;//MSTR = 1;
+  63   2              P1IE &= 0XEF;//B4 P14IE = 0
+  64   2              P1M0 |= 0x08; P1M1 &= ~0x08;}//P13推挽
+  65   1          else if(Pin == 54){//STC8G1K08A 8PIN MOSI
+  66   2              P_SW1 &= 0XF3;//B3B2=0
+  67   2              SPCTL |= 0X10;//B4 MSTR = 1,主机
+  68   2              P3IE &= 0xF7;//关闭P33 MISO数字输入
+  69   2              P5M0 |= 0x10; P5M1 &= ~0x10;}//P54推挽
+  70   1      }
+  71          void WS2812_Init(unsigned char Pin_Sel){//对于STC8G1K08A 8Pin需要执行不同的引脚初始化
+  72   1          //初始化，并决定是否为主机从机
+  73   1          P_SW1 &= 0XF3;//B3B2 = 0;
+  74   1          P_SW2 |= 0X80;//允许访问扩展寄存器
+  75   1          SPSTAT = 0XC0;//清零中断标志
+  76   1          SPCTL = 0XD4;//SPEN = 1;SSIG = 1;先发高位;主机模式;时钟空闲低电平;后时钟沿采样;SPI CLK为sysclk/4;
+  77   1          WS2812_PinSet(Pin_Sel);
+  78   1      }
+  79          void WS2812_Deinit(){//关闭SPI,但引脚解绑需要根据需求手动配置
+  80   1          SPSTAT = 0XC0;
+  81   1          SPCTL &= 0XBF;//SPEN = 0;
+  82   1      }
+  83          void WS2812_Send_Data(unsigned char WS2812_Num,unsigned char Red,unsigned char Green,unsigned char Blue){
+  84   1          //发送数据顺序为GRB
+  85   1          unsigned char i,j;
+  86   1          unsigned char dat;
+  87   1          for(j = 0;j < WS2812_Num;j++){
+  88   2          //Green
+  89   2          dat = Green;
+  90   2          for(i = 0; i < 8; i++){
+  91   3              if(dat & 0x80) SPI_Send_1_Byte(High_Code); // 提取最高位，判断发1码还是0码
+  92   3              else           SPI_Send_1_Byte(Zero_Code);
+  93   3              dat <<= 1; // 左移一位，准备发送下一位
+  94   3          }
+  95   2          //Red
+  96   2          dat = Red;
+  97   2          for(i = 0; i < 8; i++){
+  98   3              if(dat & 0x80) SPI_Send_1_Byte(High_Code);
+  99   3              else           SPI_Send_1_Byte(Zero_Code);
+ 100   3              dat <<= 1;
+ 101   3          }
+ 102   2          //Blue
+ 103   2          dat = Blue;
+ 104   2          for(i = 0; i < 8; i++){
+ 105   3              if(dat & 0x80) SPI_Send_1_Byte(High_Code);
+ 106   3              else           SPI_Send_1_Byte(Zero_Code);
+ 107   3              dat <<= 1;
+ 108   3          }
+ 109   2          }
+ 110   1          WS2812_Lightup();
+ 111   1      }
+ 112          //////LED颜色显示//////
+ 113          static const uint8_t code POW_Table[256] = {//255 * pow(k,1.8) k∈0~1的结果
+ 114          0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,2,
+ 115          2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,6,
+ 116          6,6,7,7,8,8,8,9,9,10,10,10,11,11,12,12,
+C51 COMPILER V9.60.7.0   WS2812                                                            05/08/2026 19:19:29 PAGE 3   
+
+ 117          13,13,14,14,15,15,16,16,17,17,18,18,19,19,20,21,
+ 118          21,22,22,23,24,24,25,26,26,27,28,28,29,30,30,31,
+ 119          32,32,33,34,35,35,36,37,38,38,39,40,41,41,42,43,
+ 120          44,45,46,46,47,48,49,50,51,52,53,53,54,55,56,57,
+ 121          58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,
+ 122          74,75,76,77,78,79,80,81,82,83,84,86,87,88,89,90,
+ 123          91,92,93,95,96,97,98,99,100,102,103,104,105,107,108,109,
+ 124          110,111,113,114,115,116,118,119,120,122,123,124,126,127,128,129,
+ 125          131,132,134,135,136,138,139,140,142,143,145,146,147,149,150,152,
+ 126          153,154,156,157,159,160,162,163,165,166,168,169,171,172,174,175,
+ 127          177,178,180,181,183,184,186,188,189,191,192,194,195,197,199,200,
+ 128          202,204,205,207,208,210,212,213,215,217,218,220,222,224,225,227,
+ 129          229,230,232,234,236,237,239,241,243,244,246,248,250,251,253,255
+ 130          };
+ 131          volatile uint8_t Breath_State = Brt_Rise;//呼吸模式
+ 132          volatile uint16_t Breath_Counter = 0;//呼吸计数器，实现呼吸计数
+ 133          #define Bat_Max_mV 4200
+ 134          #define Bat_Min_mV 2750
+ 135          static void WS2812_Brt_Breath(uint8_t Red,uint8_t Green,uint8_t Blue){//30ms时序调用
+ 136   1          uint16_t Redin = Red;
+ 137   1          uint16_t Greenin = Green;//转换为int量防止溢出
+ 138   1          uint16_t Brt_Ratio = (255 * 2);//最大亮度127
+ 139   1          static uint8_t Redout,Greenout;//在亮度保持状态，退出函数不会丢失
+ 140   1          switch(Breath_State){
+ 141   2              case Brt_Rise://亮度增加状态
+ 142   2                  Redout = (Redin * Breath_Counter)/Brt_Ratio;
+ 143   2                  Greenout = (Greenin * Breath_Counter)/Brt_Ratio;
+ 144   2                  if(++Breath_Counter == 255){
+ 145   3                      Breath_State = Brt_Keep_High;
+ 146   3                      Breath_Counter = 0;//清空计数器
+ 147   3                  }
+ 148   2                  break;
+ 149   2              case Brt_Keep_High:
+ 150   2                  if(++Breath_Counter >= 510){
+ 151   3                      Breath_State = Brt_Fall;
+ 152   3                      Breath_Counter = 255;//下面会使用这个来计算亮度，因此先赋值
+ 153   3                  }
+ 154   2                  break;
+ 155   2              case Brt_Fall:
+ 156   2                  Redout = (Redin * Breath_Counter)/Brt_Ratio;
+ 157   2                  Greenout = (Greenin * Breath_Counter)/Brt_Ratio;
+ 158   2                  if(--Breath_Counter == 0){
+ 159   3                      Breath_State = Brt_Keep_Low;
+ 160   3                      Breath_Counter = 0;
+ 161   3                  }
+ 162   2                  break;
+ 163   2              case Brt_Keep_Low:
+ 164   2                  if(++Breath_Counter >= 365){
+ 165   3                      Breath_State = Brt_Rise;
+ 166   3                      Breath_Counter = 0;
+ 167   3                  }
+ 168   2                  break;
+ 169   2          }
+ 170   1          WS2812_Send_Data(1, Redout, Greenout, Blue);
+ 171   1      }
+ 172          static void WS2812_Display_BatVoltage(uint16_t BatVol){//以定时器中断为时基调用
+ 173   1          static uint16_t Range = Bat_Max_mV - Bat_Min_mV;
+ 174   1          uint8_t Red,Green,Blue;
+ 175   1          uint8_t k;
+ 176   1          if (BatVol > Bat_Max_mV) BatVol = Bat_Max_mV;//如果电压超过最大或最小，则削顶
+ 177   1          else if(BatVol < Bat_Min_mV) BatVol = Bat_Min_mV;
+ 178   1          k = POW_Table[(uint8_t)((((uint32_t)(BatVol - Bat_Min_mV)) * 255) / Range)];//计算电量比例，查对数表
+C51 COMPILER V9.60.7.0   WS2812                                                            05/08/2026 19:19:29 PAGE 4   
+
+ 179   1          Green = k;
+ 180   1          Red = 255 - k;
+ 181   1          Blue  = 0;
+ 182   1          WS2812_Brt_Breath(Red,Green,Blue);
+ 183   1      }
+ 184          #define WS2812_Normal 0
+ 185          #define WS2812_Tune_Duty 1
+ 186          #define WS2812_Max_Level 2
+ 187          void WS2812_State_Machine(){//ws2812状态机，用于指示多种功能状态
+ 188   1          //实现什么功能？常态下呼吸显示电量，微调占空比时通过颜色显示当前占空比值，当风速最大时显示紫色
+ 189   1          uint8_t WS2812_State = WS2812_Normal;
+ 190   1          uint8_t Red,Green,Blue;
+ 191   1          if(Duty_Level >= 10){//共8档//这个在第一次烧录程序复位后会因为读取到0xff而变紫，是正常的
+ 192   2              WS2812_State = WS2812_Max_Level;}
+ 193   1          else if(Fine_Tune_Inc || Fine_Tune_Dec){
+ 194   2              WS2812_State = WS2812_Tune_Duty;}
+ 195   1          else{
+ 196   2              WS2812_State = WS2812_Normal;}
+ 197   1          switch(WS2812_State){
+ 198   2              case WS2812_Normal:
+ 199   2                  WS2812_Display_BatVoltage(vbat);//单位mv
+ 200   2              break;
+ 201   2              case WS2812_Tune_Duty://亮度127，防止刺眼，饱和度255，DUTY决定显示什么颜色
+ 202   2                  HSV2RGB((Duty + 2)/4,255,127,&Red,&Green,&Blue);//填入H,S,V,R,G,B
+ 203   2                  WS2812_Send_Data(1,Red,Green,Blue);
+ 204   2                  break;
+ 205   2              case WS2812_Max_Level:
+ 206   2                  HSV2RGB(242,255,127,&Red,&Green,&Blue);//显示紫色
+ 207   2                  WS2812_Send_Data(1,Red,Green,Blue);
+ 208   2                  break;
+ 209   2          }
+ 210   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1488    ----
+   CONSTANT SIZE    =    256    ----
+   XDATA SIZE       =      7      26
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

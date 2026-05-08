@@ -1,0 +1,27 @@
+AX51 MACRO ASSEMBLER  ISR_JMP                                                               05/08/26 19:19:30 PAGE     1
+
+
+MACRO ASSEMBLER AX51 V3.15.3.0
+OBJECT MODULE PLACED IN .\Objects\ISR_JMP.obj
+ASSEMBLER INVOKED BY: C:\Users\lishuo\AppData\Local\Keil_v5\C51\BIN\AX51.EXE ISR_JMP.a51 SET(LARGE) DEBUG PRINT(.\Listin
+                      gs\ISR_JMP.lst) OBJECT(.\Objects\ISR_JMP.obj) EP
+
+LOC    OBJ             LINE     SOURCE
+
+00011B                    1     CSEG AT 011BH;´¥ÃþÖÐ¶Ïº¯ÊÈë¿ÚµØÖ·
+00011B 02006B             2     LJMP 006BH;Ìø×ªµ½¹²ÓÃÖÐ¶Ï13
+                          3     END
+AX51 MACRO ASSEMBLER  ISR_JMP                                                               05/08/26 19:19:30 PAGE     2
+
+SYMBOL TABLE LISTING
+------ ----- -------
+
+
+N A M E                        T Y P E  V A L U E     ATTRIBUTES
+
+
+
+REGISTER BANK(S) USED: 0 
+
+
+ASSEMBLY COMPLETE.  0 WARNING(S), 0 ERROR(S).

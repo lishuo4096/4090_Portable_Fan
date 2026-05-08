@@ -1,0 +1,86 @@
+C51 COMPILER V9.60.7.0   TEST                                                              05/07/2026 18:44:04 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE TEST
+OBJECT MODULE PLACED IN .\Objects\test.obj
+COMPILER INVOKED BY: C:\Users\lishuo\AppData\Local\Keil_v5\C51\BIN\C51.EXE test.c LARGE OMF2 OPTIMIZE(7,SPEED) BROWSE IN
+                    -CDIR(..\..\C51) DEBUG PRINT(.\Listings\test.lst) OBJECT(.\Objects\test.obj)
+
+line level    source
+
+   1          #include "STC8H.H"
+   2          #include "main.h"
+   3          
+   4          volatile bit poweron = 1;
+   5          volatile bit System_OK = 0;
+   6          volatile bit Timer0_Sync = 1;
+   7          volatile bit Timer1_Sync = 1;
+   8          
+   9          void Delay_ms(uint16_t ms){//24MHZ
+  10   1          //看门狗定时器无法软件关闭，因此循环时间不要超过看门狗复位时间
+  11   1          uint8_t data i, j;
+  12   1          while(--ms){
+  13   2              _nop_();
+  14   2              i = 32;
+  15   2              j = 40;
+  16   2              do{
+  17   3                  while (--j);
+  18   3              } while (--i);
+  19   2          }
+  20   1      }
+  21          //26800
+  22          void main(){
+  23   1          Intterupt_Init();//打开总中断
+*** WARNING C206 IN LINE 23 OF test.c: 'Intterupt_Init': missing function-prototype
+  24   1          Timer_Init();
+  25   1          //ADC_Init();
+  26   1          GPIO_Init();
+  27   1          UART1_Init();
+  28   1          TR0 = 0;TR1 = 0;
+  29   1          //PWMA_Init();
+  30   1          TouchKey_Init();
+  31   1          RC_Wakeup_Init();
+  32   1          //WS2812_Init(13);
+  33   1          PWR_CTRL(PWR_ON);
+  34   1          TSCTRL &= ~0X80;
+  35   1          TSCTRL = 0X0D;
+  36   1          while(1){
+  37   2              //Serial_Printstrln("Now Sleep");
+  38   2              //PWR_CTRL(PWR_OFF);
+  39   2              
+  40   2              PCON |= 0X02;
+  41   2              TSSTA2 |= 0X80;
+  42   2              //PWR_CTRL(PWR_ON);//成功
+  43   2              Serial_Printnumln((TSDATH << 8) | TSDATL);
+  44   2              Serial_Printnumln((TSTH01H << 8) | TSTH01L);
+  45   2              //Serial_Printstrln("Now Wakeup");
+  46   2              //Serial_Printnumln(TSSTA2);
+  47   2              //Serial_Printnumln((TSDATH << 8) | TSDATL);
+  48   2              //Serial_Printstrln("Normal Working");
+  49   2              //System_OK = 1;
+  50   2              WDT_CONTR |= 0X10;
+  51   2          }
+  52   1      }
+  53          void INT0_ROUTINE(void) interrupt 0 {
+C51 COMPILER V9.60.7.0   TEST                                                              05/07/2026 18:44:04 PAGE 2   
+
+  54   1          //仅用于休眠下的充电唤醒
+  55   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    110    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----       2
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      4    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)

@@ -1,0 +1,237 @@
+C51 COMPILER V9.60.7.0   KEY_TOUCHKEY                                                      04/30/2026 01:05:06 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE KEY_TOUCHKEY
+OBJECT MODULE PLACED IN .\Objects\Key Touchkey.obj
+COMPILER INVOKED BY: C:\Users\lishuo\AppData\Local\Keil_v5\C51\BIN\C51.EXE Key&Touchkey.c LARGE OMF2 OPTIMIZE(8,SPEED) B
+                    -ROWSE INCDIR(..\..\C51) DEBUG PRINT(.\Listings\Key Touchkey.lst) OBJECT(.\Objects\Key Touchkey.obj)
+
+line level    source
+
+   1          #include "STC8H.H"
+   2          #include "main.h"
+   3          
+   4          volatile uint16_t TK_P11_Data = 0;//P33引脚所连接的触摸按键数据
+   5          volatile bit TK_P11_Status = 1;
+   6          #define TK_Set 1
+   7          void TouchKey_Read(){
+   8   1          uint16_t TK_Data_Temp = 0;//按键数据缓存
+   9   1          if(TSSTA2 & 0X80){//B7 TSIF = 1;
+  10   2              TK_Data_Temp = (TSDATH << 8) | TSDATL;
+  11   2              if((TSSTA2 & 0X0F) == 1){
+  12   3                  TK_P11_Data = TK_Data_Temp;
+  13   3              }
+  14   2          }
+  15   1          else return;//如果触摸按键未读取完成，就退出函数
+  16   1          /*if(TK_P11_Data >= 3000U) {
+  17   1              Serial_Printstr("TK出错 结果为");
+  18   1              Serial_Printnum(TK_P11_Data);
+  19   1              Serial_Printstrln('\0');//换行
+  20   1              TK_P11_Status = 1;//一般只有手指直接贴在天线上才会出现这种情况
+  21   1              return;
+  22   1          }*/
+  23   1          
+  24   1          TSSTA2 |= 0X80;//写1清零//清零后触摸按键会立即扫描下一个按键，所以需要先读取，再清零
+  25   1          if(TSSTA2 & 0X40){//溢出标志
+  26   2              TSSTA2 |= 0X40;//写1清零
+  27   2              Serial_Printstrln("触摸按键数据溢出");
+  28   2              TK_P11_Status = 1;//一般只有手指直接贴在函数上按键未发生
+  29   2          }
+  30   1          if(TK_P11_Data > TK1_Threshold){
+  31   2              TK_P11_Status = 0;//模拟按键的按下拉低的效果
+  32   2          }
+  33   1          else if(TK_P11_Data < (TK1_Threshold - 1000U)){
+  34   2              TK_P11_Status = 1;//加迟滞
+  35   2          }
+  36   1      }
+  37          #define Button TK_P11_Status//按键输入P32
+  38          #define Duty_Reg PWMA_CCR4//占空比寄存器，负逻辑，越小，占空比越高
+  39          #define NOKEY 0
+  40          #define SINGLEKEY 1
+  41          #define DOUBLEKEY 2
+  42          #define TRIPLEKEY 3
+  43          #define QUADRAKEY 4
+  44          #define LONGKEY 5
+  45          volatile uint16_t Duty = 500;
+  46          volatile bit Key_Happen = 0;
+  47          
+  48          volatile bit Fine_Tune_Inc = 0;   // 正在微调增加占空比
+  49          volatile bit Fine_Tune_Dec = 0;   // 正在微调减小占空比
+  50          volatile uint8_t Duty_Level = 1;//当前风速
+  51          volatile uint8_t Key_Event = NOKEY;
+  52          volatile const uint16_t Duty_Table[11] = {//10挡调节,0档不算
+  53              0, 100, 183, 255, 310, 406, 540, 777, 1000
+  54          };
+C51 COMPILER V9.60.7.0   KEY_TOUCHKEY                                                      04/30/2026 01:05:06 PAGE 2   
+
+  55          static uint8_t Rise_Edge_Counter(unsigned long Input){
+  56   1          uint32_t Mask;//掩码
+  57   1          //if(Input == 0xffffffff) return 0xff;//如果程序上出现了误采样的话，防止错误给出0上升沿导致误判关机(已
+             -解决，不需要了)
+  58   1          Mask = ~Input & (Input << 1);
+  59   1          Mask = (Mask & 0x55555555) + ((Mask >> 1) & 0x55555555);
+  60   1          Mask = (Mask & 0x33333333) + ((Mask >> 2) & 0x33333333);
+  61   1          Mask = (Mask + (Mask >> 4)) & 0x0F0F0F0F;
+  62   1          Mask = Mask + (Mask >> 8);
+  63   1          Mask = Mask + (Mask >> 16);
+  64   1          Mask = Mask & 0x0000003F;
+  65   1          return Mask;
+  66   1      }
+  67          void Key_Sampling(void){
+  68   1        //本函数自带消抖，因为不足一个定时器间隔的下降沿无法触发采样
+  69   1        //在30ms定时器中断中调用本函数
+  70   1        static  uint8_t Sampling_Counter = 0;//采样次数计数器
+  71   1        static  uint32_t Sampling_Temp = 0;//采样结果缓存
+  72   1        static bit Previous_Key = false;//之前的按键采样记录
+  73   1        static bit Now_Key = false;//当前的按键采样记录
+  74   1        static bit Is_Sampling = false;//正在采样标志
+  75   1        static bit Start_Sampling = false;//开始采样标志，由下降沿触发
+  76   1        static  uint8_t Key_Release_Counter = 0;//超时计数器，可以更快的响应单击和双击操作
+  77   1        uint8_t Rise_Edge_Result = 0;//上升沿计算的结果,非static变量，重入自动清零
+  78   1        bit Read_Temp = Button;//按键状态缓存，每次进入函数时读取
+  79   1        //采样触发(检测下降沿)
+  80   1        if(!Is_Sampling){//如果没有在采样，才做判断
+  81   2        Previous_Key = Now_Key;//存储上一次的结果
+  82   2        Now_Key = Read_Temp;//读取本次结果
+  83   2        //Key_Event = NOKEY;//未在采样状态，全局按键事件为无键
+  84   2        if((!Now_Key && Previous_Key) || need_wakeup_sampling){//上一次为1，这一次为0，是下降沿
+  85   3        Start_Sampling = true;//开始采样
+  86   3        }
+  87   2        else{
+  88   3            Sampling_Counter = 0;Sampling_Temp = 0;Key_Release_Counter = 0;
+  89   3          return;}//未触发采样，清空变量，返回
+  90   2        }
+  91   1        //开始采样与结果处理
+  92   1        if(Start_Sampling){
+  93   2          if(Sampling_Counter < 32){
+  94   3            Is_Sampling = true;
+  95   3            Sampling_Temp <<= 1;//整体左移一位,低位补0
+  96   3            if (Read_Temp){//采样引脚，如果为高电平，最低位置1
+  97   4              Sampling_Temp |= 0x01;//如果引脚为高才计1，如果为低就继续左移一位，也就是补0
+  98   4              Key_Release_Counter++;
+  99   4              if(Key_Release_Counter >= 8){//超过160ms没有按键输入
+ 100   5              Key_Release_Counter = 0;
+ 101   5              //采样超时，提前结束，未采样的部分全部补1
+ 102   5              Sampling_Temp = (Sampling_Temp << (31-Sampling_Counter)) | ((1UL << (31-Sampling_Counter)) - 1);
+ 103   5              Sampling_Counter = 31;//标记为采样结束
+ 104   5              }
+ 105   4              }
+ 106   3              else{//如果按键为低电平
+ 107   4              Key_Release_Counter = 0;
+ 108   4              }
+ 109   3              Sampling_Counter++;
+ 110   3              }
+ 111   2            else{//采满32次，采样结束,开始计算
+ 112   3              Is_Sampling = 0;
+ 113   3              Start_Sampling = 0;
+ 114   3              Sampling_Counter = 0;//清空计数器
+ 115   3              need_wakeup_sampling = 0;
+C51 COMPILER V9.60.7.0   KEY_TOUCHKEY                                                      04/30/2026 01:05:06 PAGE 3   
+
+ 116   3              Rise_Edge_Result = Rise_Edge_Counter(Sampling_Temp);//计算上升沿数量
+ 117   3              Key_Happen = 1;//出现按键事件，用于LED闪烁
+ 118   3              switch(Rise_Edge_Result){
+ 119   4                case 0: Key_Event = LONGKEY;  break;
+ 120   4                case 1: Key_Event = SINGLEKEY;break;
+ 121   4                case 2: Key_Event = DOUBLEKEY;break;
+ 122   4                case 3: Key_Event = TRIPLEKEY;break;
+ 123   4              }
+ 124   3              }
+ 125   2        }
+ 126   1      }
+ 127          const uint8_t str[] = {0XC8,0XFD,0XBB,0XF7,0X00};
+ 128          void Key_Handler(void){
+ 129   1          static bit Is_Max_Speed = 0;    //当前是否处于“三击最高速”模式
+ 130   1          static unsigned char Saved_Duty_Level = 0; // 用于三击前保存原有档位
+ 131   1          //如果当前处于三击最大速模式，且出现了单击或双击，先恢复到设置前的档位
+ 132   1          if (Is_Max_Speed && (Key_Event == SINGLEKEY || Key_Event == DOUBLEKEY)) {
+ 133   2              Duty_Level = Saved_Duty_Level;
+ 134   2              Is_Max_Speed = 0;
+ 135   2              Duty = Duty_Table[Duty_Level]; //同步原有占空比
+ 136   2          }
+ 137   1          switch(Key_Event){
+ 138   2              default:break;
+ 139   2              case NOKEY:break;
+ 140   2              case LONGKEY:
+ 141   2                  Serial_Printstrln("长按");
+ 142   2                  poweron ^= 1; 
+ 143   2                  break;
+ 144   2              case SINGLEKEY:
+ 145   2                  Serial_Printstrln("单击");
+ 146   2                  if(!Button && poweron){ //单击后按键未抬起
+ 147   3                      Fine_Tune_Inc = 1; //启动微调增加模式
+ 148   3                      Serial_Printstrln("单击后长按");
+ 149   3                  }
+ 150   2                  else{//正常单击，增加档位
+ 151   3                      Duty_Level = (Duty_Level % 10) + 1; // 0~7循环
+ 152   3                      Duty = Duty_Table[Duty_Level];
+ 153   3                  }
+ 154   2                  break;
+ 155   2              case DOUBLEKEY:
+ 156   2                  Serial_Printstrln("双击");
+ 157   2                  if(!Button && poweron){ //双击后按键未抬起
+ 158   3                      Fine_Tune_Dec = 1;//启动微调减小模式
+ 159   3                      Serial_Printstrln("双击后长按");
+ 160   3                  }
+ 161   2                  else{
+ 162   3                      Duty_Level = (Duty_Level % 10) + 1; 
+ 163   3                      Duty = Duty_Table[Duty_Level];
+ 164   3                  }
+ 165   2                  break;
+ 166   2              case TRIPLEKEY:
+ 167   2                  Serial_Printstrln(str);
+ 168   2                  //三击处理
+ 169   2                  if(!Is_Max_Speed && poweron){
+ 170   3                      Saved_Duty_Level = Duty_Level; //保存现在的档位
+ 171   3                      Duty_Level = 10;                //强制最高档
+ 172   3                      Is_Max_Speed = 1;
+ 173   3                  }
+ 174   2                  else{//再次三击，恢复
+ 175   3                      Duty_Level = Saved_Duty_Level;
+ 176   3                      Is_Max_Speed = 0;
+ 177   3                  }
+C51 COMPILER V9.60.7.0   KEY_TOUCHKEY                                                      04/30/2026 01:05:06 PAGE 4   
+
+ 178   2                  Duty = Duty_Table[Duty_Level];
+ 179   2                  break;
+ 180   2          }
+ 181   1          //电池即将耗尽时，限制最大风速
+ 182   1          if((BAT_Status == BAT_DRAINED) && (Duty_Level > 6)){
+ 183   2              Duty_Level = 6;
+ 184   2              Duty = Duty_Table[Duty_Level];
+ 185   2          }
+ 186   1          Key_Event = NOKEY; //清空事件
+ 187   1      }
+ 188          void Adjust_Duty(void){
+ 189   1          //如果检测到按键已经抬起，终止微调模式
+ 190   1          if (Button) { 
+ 191   2              Fine_Tune_Inc = 0;
+ 192   2              Fine_Tune_Dec = 0;
+ 193   2          }
+ 194   1          //持续微调 Duty(即使是低电量状态，也可以通过微调来使占空比超过低电量限制)
+ 195   1          if (Fine_Tune_Inc) {
+ 196   2              Duty = (Duty < 1000U) ? Duty + 10 : 1000U;
+ 197   2          } else if (Fine_Tune_Dec) {
+ 198   2              Duty = (Duty > 0) ? Duty - 10 : 0;
+ 199   2          }
+ 200   1          //写入寄存器
+ 201   1          Duty_Reg = (1000U - Duty); 
+ 202   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1230    ----
+   CONSTANT SIZE    =     53    ----
+   XDATA SIZE       =     40       9
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      9       1
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

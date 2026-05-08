@@ -1,0 +1,16 @@
+".\Objects\STARTUP.obj",
+".\Objects\Init.obj",
+".\Objects\ADC&Battery.obj",
+".\Objects\main.obj",
+".\Objects\Gosleep.obj",
+".\Objects\EERPOM.obj",
+".\Objects\WS2812.obj",
+".\Objects\UART1.obj",
+".\Objects\TouchKey.obj",
+".\Objects\Key.obj",
+".\Objects\ISR_JMP.obj" 
+TO ".\Objects\4090_V3" 
+
+PRINT(".\Listings\4090_V3.map") REMOVEUNUSED 
+CLASSES (XDATA (X:0x0-X:0x3FF), HDATA (X:0x0-X:0x3FF), CODE (C:0x0-C:0x1FF8), CONST (C:0x0-C:0x1FF8), 
+ECODE (C:0x0-C:0x1FF8), HCONST (C:0x0-C:0x1FF8)) 

@@ -1,0 +1,354 @@
+C51 COMPILER V9.60.7.0   TM1650                                                            04/28/2026 12:29:02 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE TM1650
+OBJECT MODULE PLACED IN .\Objects\TM1650.obj
+COMPILER INVOKED BY: C:\Users\lishuo\AppData\Local\Keil_v5\C51\BIN\C51.EXE TM1650.c OMF2 OPTIMIZE(8,SPEED) BROWSE INCDIR
+                    -(..\..\C51) DEBUG PRINT(.\Listings\TM1650.lst) OBJECT(.\Objects\TM1650.obj)
+
+line level    source
+
+   1          #include "STC8H.H"
+   2          #include "main.h"
+   3          //报错FLAG
+   4          bit TM1650_Error = 0;
+   5          //显存地址
+   6          #define TM1650_CMD1 0x48//TM1650数据命令，
+   7          #define TM1650_DIG1 0x68//四段分别地址
+   8          #define TM1650_DIG2 0x6A//一般DIG1为最高显示位
+   9          #define TM1650_DIG3 0x6C
+  10          #define TM1650_DIG4 0x6E
+  11          //取模表
+  12          #define SEG_0 0X3F
+  13          #define SEG_1 0X06
+  14          #define SEG_2 0X5B
+  15          #define SEG_3 0X4F
+  16          #define SEG_4 0X66
+  17          #define SEG_5 0X6D
+  18          #define SEG_6 0X7D
+  19          #define SEG_7 0X07
+  20          #define SEG_8 0X7F
+  21          #define SEG_9 0X6F
+  22          #define SEG_Blank 0X00
+  23          #define SEG_Minus 0X40
+  24          #define SEG_E 0X79
+  25          #define SEG_r 0X50
+  26          #define SEG_O 0X3F
+  27          #define SEG_F 0X71
+  28          #define SEG_n 0X54
+  29          #define SEG_U 0X3E
+  30          #define SEG_V 0X3E
+  31          #define SEG_P 0X73
+  32          #define SEG_C 0X39
+  33          #define SEG_A 0X77
+  34          #define SEG_B 0X7F
+  35          #define SEG_b 0X7C
+  36          #define SEG_T 0X46
+  37          #define SEG_S 0X6D
+  38          #define SEG_L 0X38
+  39          #define SEG_H 0X76
+  40          #define SEG_I 0X06
+  41          #define SEG_o 0X5C
+  42          //I2C命令表
+  43          #define I2C_IDLE 0X00
+  44          #define I2C_START 0X01
+  45          #define I2C_STOP 0X06
+  46          #define I2C_SENDMS 0X02
+  47          #define I2C_RECV_ACK 0X03
+  48          static const unsigned char TM1650_CMD2[] = {//此表决定了发送的亮度数值
+  49              0x00,// 0 关闭显示
+  50              0x11,// 1级亮度
+  51              0x21,// 2级亮度
+  52              0x31,// 3级亮度
+  53              0x41,// 4级亮度
+  54              0x51,// 5级亮度
+C51 COMPILER V9.60.7.0   TM1650                                                            04/28/2026 12:29:02 PAGE 2   
+
+  55              0x61,// 6级亮度
+  56              0x71,// 7级亮度
+  57              0x01 // 8级亮度
+  58          };
+  59          //frequency单位为k，brightness取0时关闭数码管输出
+  60          //num为要显示的数字，取值0到9999，DP为小数点位置，取值0到3
+  61          static unsigned char Seg_Table(unsigned char word) {
+  62   1          switch (word) {
+  63   2              case '0': return SEG_0;      // 0x3F
+  64   2              case '1': return SEG_1;      // 0x06
+  65   2              case '2': return SEG_2;      // 0x5B
+  66   2              case '3': return SEG_3;      // 0x4F
+  67   2              case '4': return SEG_4;      // 0x66
+  68   2              case '5': return SEG_5;      // 0x6D
+  69   2              case '6': return SEG_6;      // 0x7D
+  70   2              case '7': return SEG_7;      // 0x07
+  71   2              case '8': return SEG_8;      // 0x7F
+  72   2              case '9': return SEG_9;      // 0x6F
+  73   2              case 'A': return SEG_A;      // 0x77
+  74   2              case 'B': return SEG_B;      // 0x7F
+  75   2              case 'C': return SEG_C;      // 0x39
+  76   2              case 'E': return SEG_E;      // 0x79
+  77   2              case 'F': return SEG_F;      // 0x71
+  78   2              case 'G': return SEG_6;      // 0x7D
+  79   2              case 'H': return SEG_H;      // 0x76
+  80   2              case 'L': return SEG_L;      // 0x38
+  81   2              case 'P': return SEG_P;      // 0x73
+  82   2              case 'S': return SEG_S;      // 0x6D
+  83   2              case 'T': return SEG_7;      // 0x07
+  84   2              case 'U': return SEG_U;      // 0x3E
+  85   2              case 'V': return SEG_V;      // 0x3E
+  86   2              case 'O': return SEG_O;      // 0x3F
+  87   2              //小写字母
+  88   2              case 'b': return SEG_b;      // 0x7C
+  89   2              case 'n': return SEG_n;      // 0x54
+  90   2              case 'r': return SEG_r;      // 0x44
+  91   2              case 'o': return SEG_o;      // 0x3F
+  92   2              case 'I': return SEG_I;      // 0x06
+  93   2              case 'g': return SEG_9;      // 0x6F
+  94   2              //标点
+  95   2              case ' ': return SEG_Blank;  // 空格显示空白
+  96   2              case '-': return SEG_Minus;  // 0x40
+  97   2              default: return SEG_Blank;  // 未定义字符显示空白
+  98   2          }
+  99   1      }
+ 100          static void I2C_CMD(unsigned char CMD){//I2C命令设置
+ 101   1          unsigned int Release_Timer = 0;
+ 102   1          I2CMSCR = (I2CMSCR & 0XF0) | CMD;//只填低四位
+ 103   1          //头文件中没有MSIF的定义，因此只能手动做与运算
+ 104   1          while(!(I2CMSST & 0X40)){
+ 105   2              if(++Release_Timer > 10000) {
+ 106   3                  TM1650_Error = 1;break;}}//等待I2C控制器执行完命令，超时则退出并报错
+ 107   1          I2CMSCR = (I2CMSCR & 0XF0) | I2C_IDLE;//清空I2C命令
+ 108   1          I2CMSST &= ~0X40;//清除完成标志(~0X40 = 10111111,做与运算，可清零bit6位)
+ 109   1      }
+ 110          static bit I2C_Check_ACK(void){//TM1650不需要确认ACK
+ 111   1          unsigned char a = 0;
+ 112   1          a = (I2CMSST & 0X02);//读取I2CMSST B1位是否为1
+ 113   1          return a;//返回1或0
+ 114   1      }
+ 115          static void TM1650_Write(unsigned char Data,unsigned char Addr){//底层发送数据驱动
+ 116   1          //此处不需I2C开始与停止发送，而是手动添加，可连续发送。
+C51 COMPILER V9.60.7.0   TM1650                                                            04/28/2026 12:29:02 PAGE 3   
+
+ 117   1          if(Addr != 0){//如果需要在同一地址发送超过8bit数据，可令Addr=0
+ 118   2              I2C_CMD(I2C_START);
+ 119   2              I2CTXD = Addr;//不需要担心时序，每字节后必须有一个ack，时间足够
+ 120   2              I2C_CMD(I2C_SENDMS);//发送命令
+ 121   2              I2C_CMD(I2C_RECV_ACK);//接受ACK
+ 122   2              I2CTXD = Data;//先发地址，后发数据
+ 123   2              I2C_CMD(I2C_SENDMS);
+ 124   2              I2C_CMD(I2C_RECV_ACK);
+ 125   2              I2CTXD = 0;//清空发送寄存器
+ 126   2              I2C_CMD(I2C_STOP);
+ 127   2          }
+ 128   1          else{//往一个八位地址一直发数据，比如写OLED屏（特殊设备有16位I2C地址，在这里不做讨论）
+ 129   2              I2CTXD = Data;//先发地址，后发数据
+ 130   2              I2C_CMD(I2C_SENDMS);
+ 131   2              I2C_CMD(I2C_RECV_ACK);
+ 132   2          }
+ 133   1      }
+ 134          void TM1650_PinSet(unsigned char SCL,unsigned char SDA){
+ 135   1          P_SW2 = 0X80;
+ 136   1          //仅对STC8H和G系列部分有效
+ 137   1          //本函数请谨慎使用，务必先查看技术手册中的引脚定义，或者手动规定引脚
+ 138   1          //对于所有非法值，都不会改变I2C引脚
+ 139   1          if(SCL == 15 && SDA == 14){
+ 140   2              P_SW2 &= ~0X30;//B5,B4置0
+ 141   2              P1M0 |= 0x30; P1M1 |= 0x30; //P15 P14设置为开漏
+ 142   2          }
+ 143   1          else if(SCL == 25 && SDA == 24){
+ 144   2              P_SW2 &= ~0X30;//B5,B4置0
+ 145   2              P_SW2 |= 0X10;//B4置1
+ 146   2              P2M0 = 0X30;P2M1 = 0X30;//P25 P24开漏
+ 147   2          }
+ 148   1          else if(SCL == 77 && SDA == 76){
+ 149   2              P_SW2 &= ~0X30;//B5,B4置0
+ 150   2              P_SW2 |= 0X20;//B5置1
+ 151   2              P7M0 |= 0xC0;P7M1 |= 0xC0;//P77 P76开漏
+ 152   2          }
+ 153   1          else if(SCL == 32 && SDA == 33){
+ 154   2              P_SW2 &= ~0X30;//B5,B4置0
+ 155   2              P_SW2 |= 0X30;//B5,B4置1
+ 156   2              P3M0 |= 0x0C;P3M1 |= 0X0C;//P32,P33开漏
+ 157   2          }
+ 158   1          else if(SCL == 54 && SDA == 55){
+ 159   2              P_SW2 &= ~0X30;//B5,B4置0
+ 160   2              P_SW2 |= 0X10;//仅对STC8G1K08A 8PIN有效
+ 161   2              P5M0 |= 0X30;P5M1 |= 0X30;
+ 162   2          }
+ 163   1      }
+ 164          void TM1650_Init(unsigned int TM1650_Freq_kHz,unsigned char Brt){
+ 165   1          unsigned char MSSPEED = 0;
+ 166   1          P_SW2 |= 0X80;//允许访问扩展寄存器
+ 167   1          if(TM1650_Freq_kHz != 0){//传入0代表不重新初始化I2C
+ 168   2          I2CCFG = 0XE0;//启用I2C，主机模式
+ 169   2          MSSPEED = (((Main_FOSC/4)/(TM1650_Freq_kHz * 1000UL)) - 2) & 0X3F;//与运算只保留低六位
+ 170   2          I2CCFG = (I2CCFG & 0XC0) | MSSPEED;//写入低六位
+ 171   2          I2CMSCR = 0X00;//开启I2C主机模式中断，清空I2C命令
+ 172   2          I2CTXD = 0X00;//清空发送数据寄存器
+ 173   2          I2CRXD = 0X00;//清空接收数据寄存器
+ 174   2          I2CMSAUX = 0X00;//关闭主机自动发送功能
+ 175   2          I2CMSST = 0X00;//清零标志
+ 176   2          }
+ 177   1          TM1650_Write(TM1650_CMD2[Brt],TM1650_CMD1);//发送命令1(0X48)，再发送命令2(亮度)
+ 178   1          //MSBUSY指示I2C控制器是否忙碌，但本驱动程序不需要检查MSBUSY
+C51 COMPILER V9.60.7.0   TM1650                                                            04/28/2026 12:29:02 PAGE 4   
+
+ 179   1      }
+ 180          //在C语言中，字符串自动转换为由二进制码组成的数组
+ 181          //const char *Num 接收的是这个字符串的首地址
+ 182          //Num为指针（地址），*Num为这个地址读到的东西
+ 183          void TM1650_Display_Word(const char *Word){
+ 184   1          bit TM1650_Need_DP = 0;//是否需要小数点标志
+ 185   1          unsigned char TM1650_Current_Digit = 0;//记录当前写的数码管段
+ 186   1          unsigned char TM1650_Write_Buffer = 0;//写过程的缓存
+ 187   1              while(*Word != '\0' && TM1650_Current_Digit < 4){//字符串未结尾，且并没有写完完整4位
+ 188   2              if(*(Word+1) == '.'){//检测下一位是否是小数点(TM1650的小数点与上一个段绑定)
+ 189   3                  TM1650_Need_DP = 1;//标记需要小数点
+ 190   3              }
+ 191   2              TM1650_Write_Buffer = Seg_Table(*Word);//按字符ASCII值查表
+ 192   2              if(TM1650_Need_DP){//如果需要小数点
+ 193   3                  TM1650_Write_Buffer |= 0x80;//最高位置1
+ 194   3                  TM1650_Need_DP = 0;//清零标志
+ 195   3                  Word = Word + 1;//下一位存在小数点，直接跳过
+ 196   3                  }
+ 197   2              switch(TM1650_Current_Digit){//写入
+ 198   3                  case 0: TM1650_Write(TM1650_Write_Buffer,TM1650_DIG1); break;
+ 199   3                  case 1: TM1650_Write(TM1650_Write_Buffer,TM1650_DIG2); break;
+ 200   3                  case 2: TM1650_Write(TM1650_Write_Buffer,TM1650_DIG3); break;
+ 201   3                  case 3: TM1650_Write(TM1650_Write_Buffer,TM1650_DIG4); break;
+ 202   3                  }
+ 203   2                  TM1650_Current_Digit++;//数码管段+1
+ 204   2                  Word++;//指针+1
+ 205   2              }
+ 206   1      }
+ 207          //V1.2更新，displaynum函数支持显示负数
+ 208          void TM1650_Display_Num(unsigned int Num, unsigned char Dot_pos){
+ 209   1          //整数转字符所用变量
+ 210   1          char Trans_Temp[4];//整数截取低四位的缓存
+ 211   1          char TM1650_String_Buffer[8];//最终输出的字符串缓存区
+ 212   1          char *Ptr = TM1650_String_Buffer;//数组的指针，用于在数组取值
+ 213   1          //unsigned char i = 4; //数据保留低四位
+ 214   1          unsigned char j = 0;
+ 215   1          unsigned char k = 0;
+ 216   1          //写入TM1650所用变量+
+ 217   1          bit TM1650_Need_DP = 0;//是否需要小数点标志
+ 218   1          //bit TM1650_Is_Negtive = 0;//标记为负数//在本项目中不需要显示负数
+ 219   1          unsigned char TM1650_Current_Digit = 0;//记录当前写的数码管段
+ 220   1          unsigned char TM1650_Write_Buffer = 0;//写过程的缓存区域
+ 221   1          //检测是正数还是负数
+ 222   1          /*if(Num < 0){
+ 223   1              Num = -Num;//取反
+ 224   1              TM1650_Is_Negtive = 1;//标记为负数
+ 225   1          }*/
+ 226   1          //即使输入为负数，下面的整数转字符代码也不需要修改，写入时不写DIG1即可
+ 227   1          //整数转字符
+ 228   1          //先把整数拆解成纯数字数组 (倒序存放)
+ 229   1          //比如 1234 -> temp[0]=4, temp[1]=3, temp[2]=2, temp[3]=1
+ 230   1          //比如 -123 → temp[0]=-
+ 231   1          for(k=0; k<4; k++) {
+ 232   2              Trans_Temp[k] = (Num % 10) + '0';
+ 233   2              Num /= 10;
+ 234   2          }
+ 235   1          //根据 dot_pos 组装带点的字符串
+ 236   1          //从高位往低位填入buffer
+ 237   1          for(k=0; k<4; k++) {
+ 238   2              TM1650_String_Buffer[j++] = Trans_Temp[3-k]; //填入数字
+ 239   2              if(Dot_pos == (k + 1) && k < 3) { //如果到了设定的点位
+ 240   3                  TM1650_String_Buffer[j++] = '.';
+C51 COMPILER V9.60.7.0   TM1650                                                            04/28/2026 12:29:02 PAGE 5   
+
+ 241   3              }
+ 242   2          }
+ 243   1          TM1650_String_Buffer[j] = '\0'; //封口
+ 244   1          //字符数组读取与写入显存
+ 245   1          while(*Ptr != '\0' && TM1650_Current_Digit < 4){//字符串未结尾，且并没有写完完整4位
+ 246   2              if(*(Ptr+1) == '.'){//检测下一位是否是小数点(TM1650的小数点与上一个段绑定)
+ 247   3                  TM1650_Need_DP = 1;//标记需要小数点
+ 248   3              }
+ 249   2              TM1650_Write_Buffer = Seg_Table(*Ptr);//按字符ASCII值查表
+ 250   2              if(TM1650_Need_DP){//如果需要小数点
+ 251   3                  TM1650_Write_Buffer |= 0x80;//最高位置1
+ 252   3                  TM1650_Need_DP = 0;//清零标志
+ 253   3                  Ptr = Ptr + 1;//下一位存在小数点，直接跳过
+ 254   3                  }
+ 255   2              switch(TM1650_Current_Digit){//写入
+ 256   3                  case 0: TM1650_Write(TM1650_Write_Buffer,TM1650_DIG1); break;
+ 257   3                  case 1: TM1650_Write(TM1650_Write_Buffer,TM1650_DIG2); break;
+ 258   3                  case 2: TM1650_Write(TM1650_Write_Buffer,TM1650_DIG3); break;
+ 259   3                  case 3: TM1650_Write(TM1650_Write_Buffer,TM1650_DIG4); break;
+ 260   3                  }
+ 261   2                  TM1650_Current_Digit++;//数码管段+1
+ 262   2                  Ptr++;//指针+1
+ 263   2              }
+ 264   1      }
+ 265          void TM1650_Display_With_SetLocation_Blank(uint16_t Num,uint8_t Blank_POS,uint8_t Dot_POS){
+ 266   1          //整数转字符所用变量
+ 267   1          char Trans_Temp[4];//整数截取低四位的缓存
+ 268   1          char TM1650_String_Buffer[8];//最终输出的字符串缓存区
+ 269   1          //unsigned char i = 4; //数据保留低四位
+ 270   1          unsigned char j = 0;
+ 271   1          unsigned char k = 0;
+ 272   1          //整数转字符
+ 273   1          //先把整数拆解成纯数字数组 (倒序存放)
+ 274   1          //比如 1234 -> temp[0]=4, temp[1]=3, temp[2]=2, temp[3]=1
+ 275   1          //比如 -123 → temp[0]=-
+ 276   1          for(k=0; k<4; k++) {
+ 277   2              Trans_Temp[k] = (Num % 10) + '0';
+ 278   2              Num /= 10;
+ 279   2          }
+ 280   1          Trans_Temp[3-Blank_POS] = ' ';//填入空白位
+ 281   1          //根据 dot_pos 组装带点的字符串
+ 282   1          //从高位往低位填入buffer
+ 283   1          for(k=0; k<4; k++) {
+ 284   2              TM1650_String_Buffer[j++] = Trans_Temp[3-k]; //填入数字
+ 285   2              if(Dot_POS == (k + 1) && k < 3) { //如果到了设定的点位
+ 286   3                  TM1650_String_Buffer[j++] = '.';
+ 287   3              }
+ 288   2          }
+ 289   1          TM1650_String_Buffer[j] = '\0'; //封口
+ 290   1          TM1650_Display_Word(TM1650_String_Buffer);//发送到TM1650
+ 291   1      }
+ 292          #define MAX_VOUT 15800U
+ 293          #define MIN_VOUT 2500U
+ 294          #define MAX_IOUT 6500U
+ 295          #define MIN_IOUT 1000U
+ 296          #define SAVE_TIME 5000U//在设置状态下超时退出的时间
+ 297          volatile bit Need_Adjust = 1;//表示需要调整输出，初始化为1，上电后直接开始调整
+ 298          static void TM1650_Twinkle(uint16_t Input,uint8_t Twinkle_POS,uint8_t Dot_POS){//由1ms时序上层函数调用
+ 299   1          //输入仅能为数字
+ 300   1          static uint16_t xdata Twinkle_Timer = 0;
+ 301   1          static uint8_t Twinkle_State = 0;
+ 302   1          switch(Twinkle_State){
+C51 COMPILER V9.60.7.0   TM1650                                                            04/28/2026 12:29:02 PAGE 6   
+
+ 303   2              case 0:
+ 304   2                  if(++Twinkle_Timer >= 500) {
+ 305   3                      Twinkle_State = 1;//1000ms闪烁一个周期
+ 306   3                      Twinkle_Timer = 0;}
+ 307   2                  TM1650_Display_With_SetLocation_Blank(Input,Twinkle_POS,Dot_POS);
+ 308   2                  break;
+ 309   2              case 1:
+ 310   2                  if(++Twinkle_Timer >= 500) {
+ 311   3                      Twinkle_State = 0;//回到状态0
+ 312   3                      Twinkle_Timer = 0;}
+ 313   2                  TM1650_Display_Num(Input,Dot_POS);
+ 314   2                  break;
+ 315   2          }
+ 316   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1081    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =      2    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     10      45
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      2       2
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

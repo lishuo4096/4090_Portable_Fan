@@ -1,0 +1,39 @@
+C51 COMPILER V9.60.7.0   RCWAKEUPTEST                                                      05/07/2026 18:37:00 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE RCWAKEUPTEST
+OBJECT MODULE PLACED IN .\Objects\RCwakeuptest.obj
+COMPILER INVOKED BY: C:\Users\lishuo\AppData\Local\Keil_v5\C51\BIN\C51.EXE RCwakeuptest.c LARGE OMF2 OPTIMIZE(7,SPEED) B
+                    -ROWSE DEBUG PRINT(.\Listings\RCwakeuptest.lst) OBJECT(.\Objects\RCwakeuptest.obj)
+
+line level    source
+
+   1          #include "STC8H.H"
+   2          int main(){
+   3   1          P_SW2 |= 0X80;
+   4   1          P3M0 = 0xff; P3M1 = 0x00; 
+   5   1          P3 = 0XFF;
+   6   1          WKTCH = 0XFF;//约每16秒唤醒一次，检测电容电压是否放净，初始化时启用唤醒功能。之后就不用关了
+   7   1          WKTCL = 0XFE;//此功能不属于系统中断，不需要中断服务函数
+   8   1          PCON |= 0X02;
+   9   1          P3 = 0X00;
+  10   1          while(1);
+  11   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     26    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
